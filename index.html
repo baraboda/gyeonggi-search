@@ -447,6 +447,12 @@
         
         <!-- 전체 읽기 컨트롤 추가 -->
         <div class="global-tts-controls">
+            <!-- TTS 엔진 선택 추가 -->
+            <select id="tts-engine" onchange="changeTTSEngine()" style="padding: 10px; border-radius: 10px; border: 1px solid #ddd; background: white;">
+                <option value="browser">브라우저 기본 음성</option>
+                <option value="elevenlabs">Eleven Labs 고품질 음성</option>
+            </select>
+            
             <button class="global-tts-btn" onclick="readAllCards()">
                 <span>📚</span>
                 <span class="btn-text">전체 카드 읽기</span>
@@ -473,6 +479,73 @@
     </div>
 
     <script>
+
+        // Eleven Labs 설정
+        let useElevenLabs = false;
+        
+        // TTS 엔진 변경
+        function changeTTSEngine() {
+            const engine = document.getElementById('tts-engine').value;
+            useElevenLabs = (engine === 'elevenlabs');
+            
+            if (useElevenLabs) {
+                console.log('Eleven Labs 고품질 음성 사용');
+            } else {
+                console.log('브라우저 기본 음성 사용');
+            }
+        }
+        
+        // Eleven Labs TTS 함수
+        async function readWithElevenLabs(text) {
+            try {
+                const response = await fetch('/.netlify/functions/elevenlabs-tts', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        text: text,
+                        voiceId: 'IKne3meq5aSn9XLyUdCD' // 한국어 지원 음성
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Eleven Labs API 오류');
+                }
+                
+                const audioBlob = await response.blob();
+                const audioUrl = URL.createObjectURL(audioBlob);
+                const audio = new Audio(audioUrl);
+                
+                return new Promise((resolve, reject) => {
+                    audio.onended = () => {
+                        URL.revokeObjectURL(audioUrl);
+                        resolve();
+                    };
+                    audio.onerror = reject;
+                    audio.play();
+                });
+                
+            } catch (error) {
+                console.error('Eleven Labs 오류:', error);
+                // 폴백: 브라우저 TTS 사용
+                return readWithBrowserTTS(text);
+            }
+        }
+        
+        // 브라우저 TTS 함수
+        function readWithBrowserTTS(text) {
+            return new Promise((resolve) => {
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.lang = 'ko-KR';
+                utterance.rate = 0.95;
+                utterance.onend = resolve;
+                utterance.onerror = resolve;
+                window.speechSynthesis.speak(utterance);
+            });
+        }
+        
+        
         // 폰트 크기 조절
         let currentSize = 16;
         function changeFontSize(delta) {
@@ -556,7 +629,7 @@
         }
         
         // 다음 카드 읽기
-        function readNextCard() {
+        async function readNextCard() {
             if (!isReadingAll || currentCardIndex >= allCardsData.length) {
                 finishReading();
                 return;
@@ -567,36 +640,26 @@
             // 현재 읽는 카드 하이라이트
             document.querySelectorAll('.card').forEach(c => c.classList.remove('reading'));
             cardData.element.classList.add('reading');
-            
-            // 스크롤
             cardData.element.scrollIntoView({ behavior: 'smooth', block: 'center' });
             
-            // TTS 생성
-            currentUtterance = new SpeechSynthesisUtterance(cardData.text);
-            currentUtterance.lang = 'ko-KR';
-            currentUtterance.rate = 0.95;
-            currentUtterance.pitch = 1.0;
-            currentUtterance.volume = 1.0;
-            
-            currentUtterance.onend = () => {
+            try {
+                // Eleven Labs 또는 브라우저 TTS 선택
+                if (useElevenLabs) {
+                    await readWithElevenLabs(cardData.text);
+                } else {
+                    await readWithBrowserTTS(cardData.text);
+                }
+                
                 if (!isPaused && isReadingAll) {
                     currentCardIndex++;
                     updateReadingStatus();
-                    setTimeout(() => readNextCard(), 500); // 0.5초 쉬고 다음 카드
+                    setTimeout(() => readNextCard(), 500);
                 }
-            };
-            
-            currentUtterance.onerror = (event) => {
-                console.error('TTS 오류:', event);
-                if (isReadingAll) {
-                    currentCardIndex++;
-                    setTimeout(() => readNextCard(), 100);
-                }
-            };
-            
-            // 읽기 시작
-            window.speechSynthesis.speak(currentUtterance);
-            updateReadingStatus();
+            } catch (error) {
+                console.error('TTS 오류:', error);
+                currentCardIndex++;
+                setTimeout(() => readNextCard(), 100);
+            }
         }
         
         // 일시정지/재개
