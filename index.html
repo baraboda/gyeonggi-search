@@ -488,6 +488,11 @@
     </div>
 
     <script>
+        const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+        
+        if (isMobile) {
+            console.log('모바일 환경 감지됨');
+        }
         // TTS 전역 변수
         let useClova = true;
         let clovaSpeaker = 'nara_call';
@@ -523,7 +528,7 @@
         async function readWithClova(text) {
             console.log('CLOVA TTS 호출:', clovaSpeaker);
             
-            // 강력한 텍스트 전처리
+            // 텍스트 전처리
             let processedText = text
                 .replace(/([가-힣a-zA-Z0-9])([🚨💡📢📊])/g, '$1. $2')
                 .replace(/([가-힣])([A-Z])/g, '$1. $2')
@@ -552,27 +557,59 @@
                 const audioBlob = await response.blob();
                 const audioUrl = URL.createObjectURL(audioBlob);
                 
-                currentAudio = new Audio(audioUrl);
+                // 기존 Audio 객체 재사용 또는 새로 생성
+                if (!currentAudio) {
+                    currentAudio = new Audio();
+                    // 모바일을 위한 설정
+                    currentAudio.preload = 'auto';
+                    currentAudio.autoplay = true;
+                }
+                
+                // 이전 URL 정리
+                if (currentAudio.src && currentAudio.src.startsWith('blob:')) {
+                    URL.revokeObjectURL(currentAudio.src);
+                }
+                
+                currentAudio.src = audioUrl;
                 currentAudio.volume = 1.0;
                 
-                return new Promise((resolve) => {
-                    currentAudio.onended = () => {
+                return new Promise((resolve, reject) => {
+                    const playHandler = () => {
+                        console.log('재생 시작됨');
+                    };
+                    
+                    const endHandler = () => {
+                        currentAudio.removeEventListener('ended', endHandler);
+                        currentAudio.removeEventListener('error', errorHandler);
+                        // Audio 객체는 유지하고 URL만 정리
                         URL.revokeObjectURL(audioUrl);
-                        currentAudio = null;
                         resolve();
                     };
                     
-                    currentAudio.onerror = () => {
-                        console.error('오디오 재생 실패');
-                        currentAudio = null;
+                    const errorHandler = (err) => {
+                        console.error('오디오 재생 실패:', err);
+                        currentAudio.removeEventListener('ended', endHandler);
+                        currentAudio.removeEventListener('error', errorHandler);
                         resolve();
                     };
                     
-                    currentAudio.play().catch(err => {
-                        console.error('재생 시작 실패:', err);
-                        currentAudio = null;
-                        resolve();
-                    });
+                    currentAudio.addEventListener('ended', endHandler);
+                    currentAudio.addEventListener('error', errorHandler);
+                    
+                    // 재생 시도
+                    const playPromise = currentAudio.play();
+                    
+                    if (playPromise !== undefined) {
+                        playPromise
+                            .then(playHandler)
+                            .catch((err) => {
+                                console.error('재생 실패, 재시도:', err);
+                                // 모바일에서 실패하면 한 번 더 시도
+                                setTimeout(() => {
+                                    currentAudio.play().catch(errorHandler);
+                                }, 100);
+                            });
+                    }
                 });
                 
             } catch (error) {
@@ -748,7 +785,8 @@
             if (currentAudio) {
                 currentAudio.pause();
                 currentAudio.currentTime = 0;
-                currentAudio = null;
+                // 모바일을 위해 Audio 객체는 유지
+                // currentAudio = null; <- 이 줄 제거
             }
             
             // 브라우저 TTS 정지
