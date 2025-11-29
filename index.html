@@ -488,16 +488,15 @@
     </div>
 
     <script>
-        // TTS 설정 - CLOVA 기본
+        // TTS 전역 변수
         let useClova = true;
         let clovaSpeaker = 'nara';
-        let currentUtterance = null;
+        let currentAudio = null;
         let isReadingAll = false;
         let isPaused = false;
         let currentCardIndex = 0;
         let allCardsData = [];
-        let currentAudio = null;
-                
+        
         // TTS 엔진 변경
         function changeTTSEngine() {
             const engine = document.getElementById('tts-engine').value;
@@ -524,7 +523,7 @@
         async function readWithClova(text) {
             console.log('CLOVA TTS 호출:', clovaSpeaker);
             
-            // 텍스트 전처리
+            // 텍스트 전처리 - 라벨 뒤에 쉼표 추가
             let processedText = text
                 .replace(/문제점/g, '문제점,')
                 .replace(/제안내용/g, '제안내용,')
@@ -555,7 +554,6 @@
                 currentAudio = new Audio(audioUrl);
                 currentAudio.volume = 1.0;
                 
-                // Promise로 재생 관리
                 return new Promise((resolve) => {
                     currentAudio.onended = () => {
                         URL.revokeObjectURL(audioUrl);
@@ -569,7 +567,6 @@
                         resolve();
                     };
                     
-                    // 재생 시작
                     currentAudio.play().catch(err => {
                         console.error('재생 시작 실패:', err);
                         currentAudio = null;
@@ -614,16 +611,8 @@
             }
         });
         
-        // TTS 전역 변수
-        let currentUtterance = null;
-        let isReadingAll = false;
-        let isPaused = false;
-        let currentCardIndex = 0;
-        let allCardsData = [];
-        
         // 전체 카드 읽기
         function readAllCards() {
-            // 현재 페이지의 모든 카드 데이터 수집
             const cards = document.querySelectorAll('.card');
             if (cards.length === 0) {
                 alert('읽을 카드가 없습니다.');
@@ -631,7 +620,7 @@
             }
             
             // 기존 읽기 중지
-            window.speechSynthesis.cancel();
+            stopAllReading();
             
             // 카드 데이터 준비
             allCardsData = [];
@@ -647,12 +636,14 @@
                     el.querySelector('.section-label')?.textContent.includes('객관적 분석')
                 )?.querySelector('.section-content')?.textContent || '';
                 
-                let fullText = `${cardNumber}번 카드. ${location} 지역. ${category} 분야. 제목: ${title}. `;
+                // 자연스러운 쉼을 위한 텍스트 구성
+                let fullText = `${cardNumber}번 카드. ${location} 지역. ${category} 분야. `;
+                fullText += `제목, ${title}. `;
                 
-                if (problem) fullText += `문제점: ${problem}. `;
-                if (suggestion) fullText += `제안내용: ${suggestion}. `;
-                if (response) fullText += `답변사항: ${response}. `;
-                if (analysis) fullText += `객관적 분석: ${analysis}. `;
+                if (problem) fullText += `문제점, ${problem} `;
+                if (suggestion) fullText += `제안내용, ${suggestion} `;
+                if (response) fullText += `답변사항, ${response} `;
+                if (analysis) fullText += `객관적 분석, ${analysis} `;
                 
                 fullText += '다음 카드로 넘어갑니다. ';
                 
@@ -684,12 +675,6 @@
                 return;
             }
             
-            // 일시정지 중이면 대기
-            if (isPaused) {
-                setTimeout(() => readNextCard(), 100);
-                return;
-            }
-            
             const cardData = allCardsData[currentCardIndex];
             
             document.querySelectorAll('.card').forEach(c => c.classList.remove('reading'));
@@ -703,7 +688,6 @@
                     await readWithBrowserTTS(cardData.text);
                 }
                 
-                // 정지되지 않았으면 다음 카드로
                 if (!isPaused && isReadingAll) {
                     currentCardIndex++;
                     updateReadingStatus();
@@ -726,10 +710,8 @@
                 isPaused = false;
                 
                 if (useClova && currentAudio) {
-                    // CLOVA 오디오 재개
                     currentAudio.play();
                 } else {
-                    // 브라우저 TTS 재개
                     window.speechSynthesis.resume();
                 }
                 
@@ -738,10 +720,8 @@
                 isPaused = true;
                 
                 if (useClova && currentAudio) {
-                    // CLOVA 오디오 일시정지
                     currentAudio.pause();
                 } else {
-                    // 브라우저 TTS 일시정지
                     window.speechSynthesis.pause();
                 }
                 
@@ -767,13 +747,12 @@
             
             // UI 리셋
             document.querySelectorAll('.card').forEach(c => c.classList.remove('reading'));
-            document.querySelector('.global-tts-btn .btn-text').textContent = '전체 카드 읽기';
-            document.querySelector('.global-tts-btn').classList.remove('playing');
+            const btnText = document.querySelector('.global-tts-btn .btn-text');
+            if (btnText) btnText.textContent = '전체 카드 읽기';
+            const playingBtn = document.querySelector('.global-tts-btn.playing');
+            if (playingBtn) playingBtn.classList.remove('playing');
             updateReadingStatus();
-            
-            console.log('완전 정지됨');
         }
-
         
         // 읽기 완료
         function finishReading() {
@@ -803,6 +782,9 @@
         
         // 페이지 떠날 때 음성 정지
         window.addEventListener('beforeunload', () => {
+            if (currentAudio) {
+                currentAudio.pause();
+            }
             window.speechSynthesis.cancel();
         });
         
@@ -899,7 +881,6 @@
         
         // 검색 결과 변경 감지
         search.on('render', () => {
-            // 새로운 검색 결과가 렌더링되면 읽기 중지
             if (isReadingAll) {
                 stopAllReading();
             }
