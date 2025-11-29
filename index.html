@@ -86,6 +86,73 @@
             transform: scale(1.1);
         }
         
+        /* 전체 읽기 컨트롤 */
+        .global-tts-controls {
+            background: white;
+            border-radius: 20px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        
+        .global-tts-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 12px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 1.1em;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .global-tts-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+        }
+        
+        .global-tts-btn.playing {
+            background: linear-gradient(135deg, #f59e0b 0%, #dc2626 100%);
+        }
+        
+        .global-tts-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        
+        .tts-status {
+            flex: 1;
+            color: #666;
+            font-size: 0.95em;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .tts-progress {
+            background: #e0e0e0;
+            height: 8px;
+            border-radius: 4px;
+            overflow: hidden;
+            flex: 1;
+            max-width: 300px;
+        }
+        
+        .tts-progress-bar {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            height: 100%;
+            width: 0;
+            transition: width 0.3s;
+        }
+        
         /* 컨테이너 */
         .container {
             max-width: 1400px;
@@ -158,6 +225,11 @@
             box-shadow: 0 20px 60px rgba(0,0,0,0.15);
         }
         
+        .card.reading {
+            border: 3px solid var(--warning-color);
+            box-shadow: 0 20px 60px rgba(245, 158, 11, 0.3);
+        }
+        
         .card-header {
             padding: 20px 25px;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -210,7 +282,7 @@
             border-bottom: 1px solid #f0f0f0;
         }
         
-        .card-section:last-of-type {
+        .card-section:last-child {
             border-bottom: none;
             margin-bottom: 0;
             padding-bottom: 0;
@@ -261,45 +333,6 @@
             padding: 12px;
             border-radius: 10px;
             margin-bottom: 20px;
-        }
-        
-        /* TTS 버튼 스타일 */
-        .tts-controls {
-            display: flex;
-            gap: 10px;
-            margin-top: 15px;
-            padding-top: 15px;
-            border-top: 1px solid #f0f0f0;
-        }
-        
-        .tts-btn {
-            flex: 1;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border: none;
-            padding: 10px 15px;
-            border-radius: 10px;
-            cursor: pointer;
-            font-weight: 600;
-            transition: all 0.3s;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-        }
-        
-        .tts-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
-        }
-        
-        .tts-btn.playing {
-            background: linear-gradient(135deg, #f59e0b 0%, #dc2626 100%);
-        }
-        
-        .tts-btn:disabled {
-            background: #ccc;
-            cursor: not-allowed;
         }
         
         /* 페이지네이션 */
@@ -368,6 +401,14 @@
                 margin-bottom: 15px;
                 padding-bottom: 15px;
             }
+            
+            .global-tts-controls {
+                flex-direction: column;
+            }
+            
+            .tts-status {
+                width: 100%;
+            }
         }
         
         /* 로딩 애니메이션 */
@@ -404,6 +445,29 @@
             <div id="searchbox"></div>
         </div>
         
+        <!-- 전체 읽기 컨트롤 추가 -->
+        <div class="global-tts-controls">
+            <button class="global-tts-btn" onclick="readAllCards()">
+                <span>📚</span>
+                <span class="btn-text">전체 카드 읽기</span>
+            </button>
+            <button class="global-tts-btn" onclick="pauseResumeReading()">
+                <span>⏸️</span>
+                <span>일시정지/재개</span>
+            </button>
+            <button class="global-tts-btn" onclick="stopAllReading()">
+                <span>⏹️</span>
+                <span>정지</span>
+            </button>
+            <div class="tts-status">
+                <span id="reading-status">대기중</span>
+                <div class="tts-progress">
+                    <div class="tts-progress-bar" id="progress-bar"></div>
+                </div>
+                <span id="reading-count">0/0</span>
+            </div>
+        </div>
+        
         <div id="hits"></div>
         <div id="pagination"></div>
     </div>
@@ -428,76 +492,164 @@
             }
         });
         
-        // TTS 관련 전역 변수와 함수들
+        // TTS 전역 변수
         let currentUtterance = null;
-        let isPlaying = false;
+        let isReadingAll = false;
+        let isPaused = false;
+        let currentCardIndex = 0;
+        let allCardsData = [];
         
-        // 텍스트 이스케이프 함수
-        function escapeForTTS(text) {
-            if (!text) return '';
-            return text.replace(/'/g, "\\'").replace(/"/g, '\\"').replace(/\n/g, ' ').replace(/`/g, '\\`');
-        }
-        
-        // 카드 읽기 함수
-        function readCard(id, text) {
-            // 이미 재생 중이면 중지
-            if (isPlaying) {
-                window.speechSynthesis.cancel();
+        // 전체 카드 읽기
+        function readAllCards() {
+            // 현재 페이지의 모든 카드 데이터 수집
+            const cards = document.querySelectorAll('.card');
+            if (cards.length === 0) {
+                alert('읽을 카드가 없습니다.');
+                return;
             }
             
-            // 버튼 상태 변경
-            const btn = event.target.closest('.tts-btn');
-            const allBtns = document.querySelectorAll('.tts-btn');
-            allBtns.forEach(b => b.classList.remove('playing'));
+            // 기존 읽기 중지
+            window.speechSynthesis.cancel();
             
-            // 텍스트 정리
-            const cleanText = text.replace(/\\'/g, "'").replace(/\\"/g, '"').replace(/\\`/g, '`');
+            // 카드 데이터 준비
+            allCardsData = [];
+            cards.forEach((card, index) => {
+                const cardNumber = card.querySelector('.card-number')?.textContent || `카드 ${index + 1}`;
+                const category = card.querySelector('.card-category')?.textContent || '';
+                const location = card.querySelector('.card-location')?.textContent.replace('📍 ', '') || '';
+                const title = card.querySelector('.card-title')?.textContent || '';
+                const problem = card.querySelector('.problem-section .section-content')?.textContent || '';
+                const suggestion = card.querySelector('.suggestion-section .section-content')?.textContent || '';
+                const response = card.querySelector('.card-section .section-content')?.textContent || '';
+                const analysis = Array.from(card.querySelectorAll('.card-section')).find(el => 
+                    el.querySelector('.section-label')?.textContent.includes('객관적 분석')
+                )?.querySelector('.section-content')?.textContent || '';
+                
+                let fullText = `${cardNumber}번 카드. ${location} 지역. ${category} 분야. 제목: ${title}. `;
+                
+                if (problem) fullText += `문제점: ${problem}. `;
+                if (suggestion) fullText += `제안내용: ${suggestion}. `;
+                if (response) fullText += `답변사항: ${response}. `;
+                if (analysis) fullText += `객관적 분석: ${analysis}. `;
+                
+                fullText += '다음 카드로 넘어갑니다. ';
+                
+                allCardsData.push({
+                    element: card,
+                    text: fullText,
+                    number: cardNumber
+                });
+            });
             
-            // 새로운 음성 생성
-            currentUtterance = new SpeechSynthesisUtterance(cleanText);
+            // 읽기 시작
+            isReadingAll = true;
+            isPaused = false;
+            currentCardIndex = 0;
+            
+            // UI 업데이트
+            document.querySelector('.global-tts-btn .btn-text').textContent = '읽기 중...';
+            document.querySelector('.global-tts-btn').classList.add('playing');
+            updateReadingStatus();
+            
+            // 첫 번째 카드 읽기 시작
+            readNextCard();
+        }
+        
+        // 다음 카드 읽기
+        function readNextCard() {
+            if (!isReadingAll || currentCardIndex >= allCardsData.length) {
+                finishReading();
+                return;
+            }
+            
+            const cardData = allCardsData[currentCardIndex];
+            
+            // 현재 읽는 카드 하이라이트
+            document.querySelectorAll('.card').forEach(c => c.classList.remove('reading'));
+            cardData.element.classList.add('reading');
+            
+            // 스크롤
+            cardData.element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            
+            // TTS 생성
+            currentUtterance = new SpeechSynthesisUtterance(cardData.text);
             currentUtterance.lang = 'ko-KR';
-            currentUtterance.rate = 0.9;
+            currentUtterance.rate = 0.95;
             currentUtterance.pitch = 1.0;
             currentUtterance.volume = 1.0;
             
-            // 재생 시작
-            currentUtterance.onstart = () => {
-                isPlaying = true;
-                btn.classList.add('playing');
-                const textSpan = btn.querySelector('.tts-text');
-                if (textSpan) textSpan.textContent = '재생중';
-            };
-            
-            // 재생 종료
             currentUtterance.onend = () => {
-                isPlaying = false;
-                btn.classList.remove('playing');
-                const textSpan = btn.querySelector('.tts-text');
-                if (textSpan) textSpan.textContent = '읽기';
+                if (!isPaused && isReadingAll) {
+                    currentCardIndex++;
+                    updateReadingStatus();
+                    setTimeout(() => readNextCard(), 500); // 0.5초 쉬고 다음 카드
+                }
             };
             
-            // 에러 처리
             currentUtterance.onerror = (event) => {
                 console.error('TTS 오류:', event);
-                isPlaying = false;
-                btn.classList.remove('playing');
-                const textSpan = btn.querySelector('.tts-text');
-                if (textSpan) textSpan.textContent = '읽기';
+                if (isReadingAll) {
+                    currentCardIndex++;
+                    setTimeout(() => readNextCard(), 100);
+                }
             };
             
-            // 재생
+            // 읽기 시작
             window.speechSynthesis.speak(currentUtterance);
+            updateReadingStatus();
         }
         
-        // 읽기 정지
-        function stopReading() {
+        // 일시정지/재개
+        function pauseResumeReading() {
+            if (!isReadingAll) return;
+            
+            if (isPaused) {
+                isPaused = false;
+                window.speechSynthesis.resume();
+            } else {
+                isPaused = true;
+                window.speechSynthesis.pause();
+            }
+        }
+        
+        // 전체 정지
+        function stopAllReading() {
+            isReadingAll = false;
+            isPaused = false;
+            currentCardIndex = 0;
             window.speechSynthesis.cancel();
-            isPlaying = false;
-            document.querySelectorAll('.tts-btn').forEach(btn => {
-                btn.classList.remove('playing');
-                const textSpan = btn.querySelector('.tts-text');
-                if (textSpan) textSpan.textContent = '읽기';
-            });
+            
+            // UI 리셋
+            document.querySelectorAll('.card').forEach(c => c.classList.remove('reading'));
+            document.querySelector('.global-tts-btn .btn-text').textContent = '전체 카드 읽기';
+            document.querySelector('.global-tts-btn').classList.remove('playing');
+            updateReadingStatus();
+        }
+        
+        // 읽기 완료
+        function finishReading() {
+            isReadingAll = false;
+            document.querySelectorAll('.card').forEach(c => c.classList.remove('reading'));
+            document.querySelector('.global-tts-btn .btn-text').textContent = '전체 카드 읽기';
+            document.querySelector('.global-tts-btn').classList.remove('playing');
+            document.getElementById('reading-status').textContent = '읽기 완료';
+        }
+        
+        // 상태 업데이트
+        function updateReadingStatus() {
+            const status = document.getElementById('reading-status');
+            const count = document.getElementById('reading-count');
+            const progressBar = document.getElementById('progress-bar');
+            
+            if (isReadingAll) {
+                status.textContent = `${allCardsData[currentCardIndex]?.number || ''} 읽는 중...`;
+                count.textContent = `${currentCardIndex + 1}/${allCardsData.length}`;
+                progressBar.style.width = `${((currentCardIndex + 1) / allCardsData.length) * 100}%`;
+            } else {
+                status.textContent = '대기중';
+                count.textContent = '0/0';
+                progressBar.style.width = '0%';
+            }
         }
         
         // 페이지 떠날 때 음성 정지
@@ -537,13 +689,6 @@
                 container: '#hits',
                 templates: {
                     item(hit) {
-                        // TTS용 텍스트 준비
-                        const ttsTitle = escapeForTTS(hit.현안제목 || '제목 없음');
-                        const ttsProblem = hit.문제점 ? '문제점. ' + escapeForTTS(hit.문제점) : '';
-                        const ttsSuggestion = hit.제안내용 ? '제안내용. ' + escapeForTTS(hit.제안내용) : '';
-                        const ttsResponse = hit.답변사항 ? '답변사항. ' + escapeForTTS(hit.답변사항) : '';
-                        const fullText = `${ttsTitle}. ${ttsProblem} ${ttsSuggestion} ${ttsResponse}`;
-                        
                         return `
                             <div class="card">
                                 <div class="card-header">
@@ -583,17 +728,6 @@
                                         <div class="section-content">${hit['객관적 분석'] || hit.객관적분석}</div>
                                     </div>
                                     ` : ''}
-                                    
-                                    <div class="tts-controls">
-                                        <button class="tts-btn" onclick="readCard('${hit.objectID}', \`${fullText}\`)">
-                                            <span class="tts-icon">🔊</span>
-                                            <span class="tts-text">읽기</span>
-                                        </button>
-                                        <button class="tts-btn" onclick="stopReading()">
-                                            <span>⏹️</span>
-                                            <span>정지</span>
-                                        </button>
-                                    </div>
                                 </div>
                             </div>
                         `;
@@ -613,6 +747,14 @@
         ]);
 
         search.start();
+        
+        // 검색 결과 변경 감지
+        search.on('render', () => {
+            // 새로운 검색 결과가 렌더링되면 읽기 중지
+            if (isReadingAll) {
+                stopAllReading();
+            }
+        });
     </script>
 </body>
 </html>
