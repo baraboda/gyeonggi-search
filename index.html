@@ -445,8 +445,7 @@
             <div id="searchbox"></div>
         </div>
         
-        <!-- 전체 읽기 컨트롤 추가 -->
-        <!-- 전체 읽기 컨트롤 추가 -->
+        <!-- 전체 읽기 컨트롤 -->
         <div class="global-tts-controls">
             <!-- TTS 엔진 선택 -->
             <select id="tts-engine" onchange="changeTTSEngine()" style="padding: 10px; border-radius: 10px; border: 1px solid #ddd; background: white;">
@@ -483,13 +482,12 @@
                 <span id="reading-count">0/0</span>
             </div>
         </div>
+        
         <div id="hits"></div>
         <div id="pagination"></div>
-        
-    </div> 
+    </div>
 
     <script>
-
         // TTS 설정 - CLOVA 기본
         let useClova = true;
         let clovaSpeaker = 'nara';
@@ -576,7 +574,6 @@
             });
         }
         
-        
         // 폰트 크기 조절
         let currentSize = 16;
         function changeFontSize(delta) {
@@ -605,8 +602,6 @@
         
         // 전체 카드 읽기
         function readAllCards() {
-            // 오디오 컨텍스트 활성화 (중요!)
-
             // 현재 페이지의 모든 카드 데이터 수집
             const cards = document.querySelectorAll('.card');
             if (cards.length === 0) {
