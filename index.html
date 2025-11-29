@@ -530,6 +530,11 @@
                 .replace(/답변사항/g, '답변사항,')
                 .replace(/객관적 분석/g, '객관적 분석,')
                 .replace(/제목:/g, '제목,');
+                .replace(/([가-힣a-zA-Z0-9])([🚨💡📢📊])/g, '$1. $2')  // 이모지 앞에 마침표
+                .replace(/([가-힣])([A-Z])/g, '$1. $2')  // 한글 다음 영어 대문자
+                .replace(/화\s+/g, '화. ')  // "명확화 답변사항" 같은 패턴
+                .replace(/\.\s*\./g, '. . ')  // 이중 마침표는 공백 추가
+                .replace(/([.!?])\s*([가-힣A-Z])/g, '$1 . $2');  // 문장 끝 후 더 긴 쉼
             
             try {
                 const response = await fetch('/.netlify/functions/clova-tts', {
@@ -629,23 +634,31 @@
                 const category = card.querySelector('.card-category')?.textContent || '';
                 const location = card.querySelector('.card-location')?.textContent.replace('📍 ', '') || '';
                 const title = card.querySelector('.card-title')?.textContent || '';
-                const problem = card.querySelector('.problem-section .section-content')?.textContent || '';
-                const suggestion = card.querySelector('.suggestion-section .section-content')?.textContent || '';
-                const response = card.querySelector('.card-section .section-content')?.textContent || '';
-                const analysis = Array.from(card.querySelectorAll('.card-section')).find(el => 
+                
+                // 원본 텍스트 가져오기
+                let problem = card.querySelector('.problem-section .section-content')?.textContent || '';
+                let suggestion = card.querySelector('.suggestion-section .section-content')?.textContent || '';
+                let response = card.querySelector('.card-section .section-content')?.textContent || '';
+                let analysis = Array.from(card.querySelectorAll('.card-section')).find(el => 
                     el.querySelector('.section-label')?.textContent.includes('객관적 분석')
                 )?.querySelector('.section-content')?.textContent || '';
                 
-                // 자연스러운 쉼을 위한 텍스트 구성
+                // 텍스트 끝에 마침표 없으면 추가
+                if (problem && !problem.trim().endsWith('.')) problem += '.';
+                if (suggestion && !suggestion.trim().endsWith('.')) suggestion += '.';
+                if (response && !response.trim().endsWith('.')) response += '.';
+                if (analysis && !analysis.trim().endsWith('.')) analysis += '.';
+                
+                // 섹션 사이에 충분한 쉼을 위한 텍스트 구성
                 let fullText = `${cardNumber}번 카드. ${location} 지역. ${category} 분야. `;
-                fullText += `제목, ${title}. `;
+                fullText += `제목은, ${title}입니다. . `;  // 이중 마침표로 긴 쉼
                 
-                if (problem) fullText += `문제점, ${problem} `;
-                if (suggestion) fullText += `제안내용, ${suggestion} `;
-                if (response) fullText += `답변사항, ${response} `;
-                if (analysis) fullText += `객관적 분석, ${analysis} `;
+                if (problem) fullText += `문제점입니다. ${problem} . . `;  // 섹션 전환 시 이중 마침표
+                if (suggestion) fullText += `제안내용입니다. ${suggestion} . . `;
+                if (response) fullText += `답변사항입니다. ${response} . . `;
+                if (analysis) fullText += `객관적 분석입니다. ${analysis} . . `;
                 
-                fullText += '다음 카드로 넘어갑니다. ';
+                fullText += '. . 다음 카드로 넘어갑니다. . ';
                 
                 allCardsData.push({
                     element: card,
