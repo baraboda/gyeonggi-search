@@ -455,11 +455,11 @@
             
             <!-- CLOVA 화자 선택 -->
             <select id="clova-speaker" onchange="changeClovaSpeaker()" style="padding: 10px; border-radius: 10px; border: 1px solid #ddd; background: white;">
-                <option value="nara">나라 (여성, 차분함)</option>
-                <option value="nminsang">민상 (남성, 차분함)</option>
-                <option value="ndain">다인 (여성, 밝음)</option>
-                <option value="njiyun">지윤 (여성, 차분함)</option>
-                <option value="njinho">진호 (남성, 전문)</option>
+                <option value="nara_call">나라 (여성, 상담원, 최신)</option>
+                <option value="ndain">다인 (여성, 밝고 경쾌, 최신)</option>
+                <option value="njiyun">지윤 (여성, 차분한 낭독, 최신)</option>
+                <option value="nsujin">수진 (여성, 전문 아나운서, 최신)</option>
+                <option value="njinho">진호 (남성, 뉴스 앵커, 최신)</option>
             </select>
             
             <button class="global-tts-btn" onclick="readAllCards()">
@@ -490,7 +490,7 @@
     <script>
         // TTS 전역 변수
         let useClova = true;
-        let clovaSpeaker = 'nara';
+        let clovaSpeaker = 'nara_call';
         let currentAudio = null;
         let isReadingAll = false;
         let isPaused = false;
