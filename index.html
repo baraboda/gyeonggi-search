@@ -446,11 +446,21 @@
         </div>
         
         <!-- 전체 읽기 컨트롤 추가 -->
+        <!-- 전체 읽기 컨트롤 추가 -->
         <div class="global-tts-controls">
-            <!-- TTS 엔진 선택 추가 -->
+            <!-- TTS 엔진 선택 -->
             <select id="tts-engine" onchange="changeTTSEngine()" style="padding: 10px; border-radius: 10px; border: 1px solid #ddd; background: white;">
                 <option value="browser">브라우저 기본 음성</option>
-                <option value="elevenlabs">Eleven Labs 고품질 음성</option>
+                <option value="clova" selected>네이버 CLOVA (추천)</option>
+            </select>
+            
+            <!-- CLOVA 화자 선택 -->
+            <select id="clova-speaker" onchange="changeClovaSpeaker()" style="padding: 10px; border-radius: 10px; border: 1px solid #ddd; background: white;">
+                <option value="nara">나라 (여성, 차분함)</option>
+                <option value="nminsang">민상 (남성, 차분함)</option>
+                <option value="ndain">다인 (여성, 밝음)</option>
+                <option value="njiyun">지윤 (여성, 차분함)</option>
+                <option value="njinho">진호 (남성, 전문)</option>
             </select>
             
             <button class="global-tts-btn" onclick="readAllCards()">
@@ -473,72 +483,79 @@
                 <span id="reading-count">0/0</span>
             </div>
         </div>
-        
-        <div id="hits"></div>
-        <div id="pagination"></div>
-    </div>
 
     <script>
 
-        // Eleven Labs 설정
-        let useElevenLabs = false;
+        // TTS 설정 - CLOVA 기본
+        let useClova = true;
+        let clovaSpeaker = 'nara';
         
         // TTS 엔진 변경
         function changeTTSEngine() {
             const engine = document.getElementById('tts-engine').value;
-            useElevenLabs = (engine === 'elevenlabs');
+            const speakerSelect = document.getElementById('clova-speaker');
             
-            if (useElevenLabs) {
-                console.log('Eleven Labs 고품질 음성 사용');
+            useClova = (engine === 'clova');
+            
+            if (useClova) {
+                speakerSelect.style.display = 'inline-block';
+                console.log('네이버 CLOVA 음성 사용');
             } else {
+                speakerSelect.style.display = 'none';
                 console.log('브라우저 기본 음성 사용');
             }
         }
         
-        // Eleven Labs TTS 함수
-        async function readWithElevenLabs(text) {
-            console.log('Eleven Labs 호출 시작');
+        // CLOVA 화자 변경
+        function changeClovaSpeaker() {
+            clovaSpeaker = document.getElementById('clova-speaker').value;
+            console.log('CLOVA 화자 변경:', clovaSpeaker);
+        }
+        
+        // CLOVA TTS 함수
+        async function readWithClova(text) {
+            console.log('CLOVA TTS 호출:', clovaSpeaker);
             
             try {
-                const response = await fetch('/.netlify/functions/elevenlabs-tts', {
+                const response = await fetch('/.netlify/functions/clova-tts', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
                         text: text,
-                        voiceId: 'IKne3meq5aSn9XLyUdCD'
+                        speaker: clovaSpeaker
                     })
                 });
                 
                 if (!response.ok) {
-                    throw new Error(`API 오류: ${response.status}`);
+                    const errorText = await response.text();
+                    console.error('CLOVA 응답 오류:', errorText);
+                    throw new Error(`CLOVA API 오류: ${response.status}`);
                 }
                 
                 const audioBlob = await response.blob();
                 const audioUrl = URL.createObjectURL(audioBlob);
                 const audio = new Audio(audioUrl);
                 
-                // 중요: 사용자 상호작용 컨텍스트 내에서 재생
                 audio.volume = 1.0;
                 
-                // Promise로 재생 시도
-                return audio.play().then(() => {
-                    return new Promise((resolve) => {
-                        audio.onended = () => {
-                            URL.revokeObjectURL(audioUrl);
-                            resolve();
-                        };
-                    });
-                }).catch(err => {
-                    console.error('오디오 재생 실패, 클릭 후 다시 시도하세요:', err);
-                    // 사용자에게 알림
-                    alert('오디오 재생을 위해 버튼을 다시 클릭해주세요.');
-                    throw err;
+                // 오디오 재생
+                await audio.play();
+                
+                return new Promise((resolve) => {
+                    audio.onended = () => {
+                        URL.revokeObjectURL(audioUrl);
+                        resolve();
+                    };
+                    audio.onerror = () => {
+                        console.error('오디오 재생 실패');
+                        resolve();
+                    };
                 });
                 
             } catch (error) {
-                console.error('Eleven Labs 오류:', error);
+                console.error('CLOVA 오류, 브라우저 TTS로 전환:', error);
                 return readWithBrowserTTS(text);
             }
         }
@@ -653,15 +670,14 @@
             
             const cardData = allCardsData[currentCardIndex];
             
-            // 현재 읽는 카드 하이라이트
             document.querySelectorAll('.card').forEach(c => c.classList.remove('reading'));
             cardData.element.classList.add('reading');
             cardData.element.scrollIntoView({ behavior: 'smooth', block: 'center' });
             
             try {
-                // Eleven Labs 또는 브라우저 TTS 선택
-                if (useElevenLabs) {
-                    await readWithElevenLabs(cardData.text);
+                // CLOVA 또는 브라우저 TTS 선택
+                if (useClova) {
+                    await readWithClova(cardData.text);
                 } else {
                     await readWithBrowserTTS(cardData.text);
                 }
@@ -673,8 +689,10 @@
                 }
             } catch (error) {
                 console.error('TTS 오류:', error);
-                currentCardIndex++;
-                setTimeout(() => readNextCard(), 100);
+                if (isReadingAll) {
+                    currentCardIndex++;
+                    setTimeout(() => readNextCard(), 100);
+                }
             }
         }
         
